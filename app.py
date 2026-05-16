@@ -72,9 +72,8 @@ def init_app():
     """, unsafe_allow_html=True)
 
 def main():
-    db.expire_old_sessions()
-    db.init_db()
     """Main app entry point"""
+    db.expire_old_sessions()
     init_app()
     
     # Check if user is logged in

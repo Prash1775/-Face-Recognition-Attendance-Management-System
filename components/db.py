@@ -20,7 +20,10 @@ if SUPABASE_URL and SUPABASE_KEY:
     try:
         _supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
     except Exception as e:
-        print(f"Supabase connection error: {e}")
+        st.error(f"Supabase connection error: {e}")
+else:
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        st.warning("⚠️ Supabase credentials not found in st.secrets. Falling back to local SQLite.")
 
 def is_supabase():
     """Check if we are using Supabase"""
