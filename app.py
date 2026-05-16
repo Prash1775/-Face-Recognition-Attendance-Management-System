@@ -75,16 +75,21 @@ def init_app():
 
 def main():
     """Main app entry point"""
-    from components import db
-    db.expire_old_sessions()
-    init_app()
-    
-    # Check if user is logged in
-    from components import auth
-    if not auth.is_logged_in():
-        show_home_page()
-    else:
-        show_role_based_page()
+    try:
+        from components import db
+        db.expire_old_sessions()
+        init_app()
+        
+        # Check if user is logged in
+        from components import auth
+        if not auth.is_logged_in():
+            show_home_page()
+        else:
+            show_role_based_page()
+    except Exception as e:
+        import traceback
+        st.error(f"CRITICAL ERROR: {str(e)}")
+        st.code(traceback.format_exc())
 
 def show_home_page():
     """Home page with role selection"""
