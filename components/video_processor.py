@@ -3,7 +3,7 @@ import numpy as np
 import av
 from PIL import Image
 from streamlit_webrtc import VideoProcessorBase
-from components import face_engine, liveness
+from components import liveness
 
 class AttendanceProcessor(VideoProcessorBase):
     def __init__(self):
@@ -46,6 +46,7 @@ class AttendanceProcessor(VideoProcessorBase):
                  self.box_color = (255, 255, 0) # Cyan
                  
                  # 2. Hand challenge passed, now locate and scan the face!
+                 from components import face_engine
                  face_enc = face_engine.extract_face_encoding(Image.fromarray(rgb_img))
                  
                  if face_enc is None:

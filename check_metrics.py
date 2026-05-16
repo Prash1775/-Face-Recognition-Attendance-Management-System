@@ -1,9 +1,9 @@
 import glob
 from PIL import Image
-from components.face_engine import verify_face, extract_face_encoding
 import json
 
 def get_metrics():
+    from components.face_engine import verify_face, extract_face_encoding
     try:
         ref_img = Image.open('reference.jpg')
         ref_encoding = extract_face_encoding(ref_img)

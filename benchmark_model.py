@@ -1,9 +1,9 @@
 import os
 import glob
 from PIL import Image
-from components.face_engine import verify_face, extract_face_encoding
 
 def calculate_metrics(reference_image_path, positive_folder, negative_folder):
+    from components.face_engine import verify_face, extract_face_encoding
     print("Loading Baseline Reference Face...")
     try:
          ref_img = Image.open(reference_image_path)
