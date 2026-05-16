@@ -1,6 +1,4 @@
-import face_recognition
 import numpy as np
-import cv2
 from PIL import Image
 import io
 
@@ -21,6 +19,7 @@ def enhance_lighting(image_array):
             image_array = image_array.astype(np.uint8)
             
         # Convert RGB to LAB color space
+        import cv2
         lab = cv2.cvtColor(image_array, cv2.COLOR_RGB2LAB)
         l_channel, a_channel, b_channel = cv2.split(lab)
         
@@ -61,6 +60,7 @@ def extract_face_encoding(image_pil):
             pass
         
         # Find faces in image
+        import face_recognition
         face_locations = face_recognition.face_locations(image_array, model=MODEL)
         
         if len(face_locations) == 0:
@@ -103,6 +103,7 @@ def verify_face(stored_encoding, capture_encoding, tolerance=TOLERANCE):
             return False
         
         # Calculate face distance
+        import face_recognition
         distance = face_recognition.face_distance([stored_encoding], capture_encoding)[0]
         
         # Mathematically map distance to a standard Percentage logic (0.0 to 100.0%)
@@ -145,6 +146,7 @@ def compare_faces_batch(known_encodings, capture_encoding, tolerance=TOLERANCE):
         if not known_encodings or capture_encoding is None:
             return [], []
         
+        import face_recognition
         results = face_recognition.compare_faces(known_encodings, capture_encoding, tolerance=tolerance)
         distances = face_recognition.face_distance(known_encodings, capture_encoding)
         
@@ -171,6 +173,7 @@ def process_camera_frame(image_pil):
         image_array = enhance_lighting(image_array)
         
         # Find all faces
+        import face_recognition
         face_locations = face_recognition.face_locations(image_array, model=MODEL)
         
         num_faces = len(face_locations)

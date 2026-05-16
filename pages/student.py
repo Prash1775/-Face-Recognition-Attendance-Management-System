@@ -1,10 +1,9 @@
 import streamlit as st
-import cv2
 import numpy as np
 import pandas as pd
 import plotly.express as px
 from PIL import Image
-from components import db, face_engine, liveness
+from components import db
 
 def show_profile_page(user):
     st.header("Profile & Face Registration")
@@ -23,6 +22,7 @@ def show_profile_page(user):
         img_file = st.camera_input("Take a photo with your webcam")
 
     if img_file is not None:
+        from components import face_engine
         img = Image.open(img_file)
         encoding = face_engine.extract_face_encoding(img)
 
@@ -91,6 +91,7 @@ def show_mark_attendance_page(user):
         img_file = st.camera_input("Take a photo to mark attendance")
         
         if img_file is not None:
+             from components import face_engine
              img = Image.open(img_file)
              encoding = face_engine.extract_face_encoding(img)
              

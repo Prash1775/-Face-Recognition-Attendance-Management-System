@@ -1,4 +1,3 @@
-import cv2
 import numpy as np
 mp_hands = None
 hands_detector = None

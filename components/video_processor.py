@@ -1,4 +1,3 @@
-import cv2
 import numpy as np
 import av
 from PIL import Image
@@ -15,6 +14,7 @@ class AttendanceProcessor(VideoProcessorBase):
         self.frame_count = 0
 
     def recv(self, frame):
+        import cv2
         # Convert the frame from the WebRTC protocol to a standard OpenCV BGR image array
         img = frame.to_ndarray(format="bgr24")
         
