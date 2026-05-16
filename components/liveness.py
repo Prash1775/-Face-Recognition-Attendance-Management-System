@@ -1,17 +1,22 @@
 import cv2
 import numpy as np
-import mediapipe as mp
-import random
+mp_hands = None
+hands_detector = None
 
-mp_hands = mp.solutions.hands
-# Initialize Hands model globally so it isn't recreated on every frame
-hands_detector = mp_hands.Hands(
-    static_image_mode=False, # Use tracking for faster performance on video
-    max_num_hands=1,
-    min_detection_confidence=0.5
-)
+def _get_hands_detector():
+    global mp_hands, hands_detector
+    if hands_detector is None:
+        import mediapipe as mp
+        mp_hands = mp.solutions.hands
+        hands_detector = mp_hands.Hands(
+            static_image_mode=False,
+            max_num_hands=1,
+            min_detection_confidence=0.5
+        )
+    return hands_detector, mp_hands
 
 def generate_liveness_challenge():
+    import random
     """Generates a random finger count challenge (1 to 4 fingers)"""
     return random.randint(1, 4)
 
@@ -25,7 +30,8 @@ def count_fingers(image_array):
     if image_array.dtype != np.uint8:
         image_array = image_array.astype(np.uint8)
         
-    results = hands_detector.process(image_array)
+    detector, mp_h = _get_hands_detector()
+    results = detector.process(image_array)
 
     if not results.multi_hand_landmarks:
         return -1  # No hand found in the image
@@ -36,17 +42,17 @@ def count_fingers(image_array):
 
     # Core fingers: Index, Middle, Ring, Pinky
     tip_ids = [
-        mp_hands.HandLandmark.INDEX_FINGER_TIP,
-        mp_hands.HandLandmark.MIDDLE_FINGER_TIP,
-        mp_hands.HandLandmark.RING_FINGER_TIP,
-        mp_hands.HandLandmark.PINKY_TIP
+        mp_h.HandLandmark.INDEX_FINGER_TIP,
+        mp_h.HandLandmark.MIDDLE_FINGER_TIP,
+        mp_h.HandLandmark.RING_FINGER_TIP,
+        mp_h.HandLandmark.PINKY_TIP
     ]
     
     compare_ids = [
-        mp_hands.HandLandmark.INDEX_FINGER_PIP,
-        mp_hands.HandLandmark.MIDDLE_FINGER_PIP,
-        mp_hands.HandLandmark.RING_FINGER_PIP,
-        mp_hands.HandLandmark.PINKY_PIP
+        mp_h.HandLandmark.INDEX_FINGER_PIP,
+        mp_h.HandLandmark.MIDDLE_FINGER_PIP,
+        mp_h.HandLandmark.RING_FINGER_PIP,
+        mp_h.HandLandmark.PINKY_PIP
     ]
     
     # For standard fingers, if the Tip y-coordinate is lower than the PIP y-coordinate,
