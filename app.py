@@ -1,5 +1,6 @@
 import streamlit as st
-from components import db, auth
+# Top-level imports removed to prevent startup crashes
+# They will be imported inside functions
 
 COLLEGE_NAME = "Department of Technology, Pune"
 
@@ -13,6 +14,7 @@ st.set_page_config(
 
 def init_app():
     """Initialize app"""
+    from components import db, auth
     auth.init_session_state()
     db.init_db()
     
@@ -73,10 +75,12 @@ def init_app():
 
 def main():
     """Main app entry point"""
+    from components import db
     db.expire_old_sessions()
     init_app()
     
     # Check if user is logged in
+    from components import auth
     if not auth.is_logged_in():
         show_home_page()
     else:
@@ -124,6 +128,7 @@ def show_student_login():
                 if not roll_number or not password:
                     st.error("Please fill all fields")
                 else:
+                    from components import auth
                     success, message = auth.login_student(roll_number, password)
                     if success:
                         st.success(message)
