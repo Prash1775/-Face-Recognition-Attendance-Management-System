@@ -391,11 +391,23 @@ def end_session(session_id):
 
 def expire_old_sessions():
     if is_supabase():
-        response = _supabase.table("sessions").select("id, start_time, duration_minutes").eq("status", "active").execute()
-        for session in response.data:
-            start = datetime.fromisoformat(session['start_time'].replace('Z', '+00:00'))
-            if datetime.now(start.tzinfo) > start + timedelta(minutes=session['duration_minutes']):
-                _supabase.table("sessions").update({"status": "ended"}).eq("id", session['id']).execute()
+        try:
+            response = _supabase.table("sessions").select("id, start_time, duration_minutes").eq("status", "active").execute()
+            
+            for session in response.data:
+                # Need to handle timezone-aware datetime correctly
+                start_str = session['start_time']
+                if 'Z' in start_str:
+                    start_str = start_str.replace('Z', '+00:00')
+                    
+                start = datetime.fromisoformat(start_str)
+                now = datetime.now(start.tzinfo)
+                
+                if now > start + timedelta(minutes=session['duration_minutes']):
+                    _supabase.table("sessions").update({"status": "ended"}).eq("id", session['id']).execute()
+        except Exception as e:
+            # Table might not exist yet or connection error
+            print(f"Warning: Could not expire sessions: {e}")
     else:
         conn = get_connection()
         c = conn.cursor()
