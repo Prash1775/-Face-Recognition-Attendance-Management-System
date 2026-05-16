@@ -9,5 +9,6 @@ plotly
 pillow
 numpy
 opencv-python-headless
+mediapipe
 dlib-bin
 face-recognition
