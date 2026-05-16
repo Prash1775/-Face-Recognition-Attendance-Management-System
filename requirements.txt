@@ -7,8 +7,8 @@ pytz
 fpdf2
 plotly
 pillow
-numpy
-opencv-python-headless
+numpy<2.0.0
+opencv-python-headless<4.9
 mediapipe
 dlib-bin
 face-recognition
