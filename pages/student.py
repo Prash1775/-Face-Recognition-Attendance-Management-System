@@ -22,18 +22,20 @@ def show_profile_page(user):
         img_file = st.camera_input("Take a photo with your webcam")
 
     if img_file is not None:
-        # Avoid infinite re-runs by caching the processing result in session state
-        image_key = f"reg_processed_{img_file.name}_{img_file.size}"
-        
+        # Use MD5 hash of actual image bytes as cache key.
+        # filename+size was identical for different photos (same webcam name, similar JPEG sizes)
+        # causing retries to always return the cached failure without re-processing.
+        import hashlib
+        image_bytes = img_file.getvalue()
+        image_key = f"reg_{hashlib.md5(image_bytes).hexdigest()}"
+
         if image_key not in st.session_state:
-            with st.spinner("⚙️ Resizing and analyzing face image..."):
+            with st.spinner("⚙️ Analyzing face image..."):
                 from components import face_engine
                 img = Image.open(img_file)
-                
-                # OPTIMIZATION: Downscale high-resolution webcam inputs (e.g. 1080p -> 640px max)
-                # This makes CPU processing 9x faster while maintaining full face recognition accuracy!
+                img.load()  # Force PIL decode before thumbnail
                 img.thumbnail((640, 640))
-                
+
                 encoding = face_engine.extract_face_encoding(img)
 
                 if encoding is not None:
@@ -48,7 +50,8 @@ def show_profile_page(user):
             if st.session_state[image_key] == "success":
                 st.success("✅ Face registered successfully! You can turn off the webcam toggle now.")
             else:
-                st.error("❌ No face detected. Please look directly at the camera in good lighting.")
+                st.error("❌ No face detected. Please clear the photo and try again.")
+
 
 def show_mark_attendance_page(user):
     db.expire_old_sessions()
@@ -108,9 +111,10 @@ def show_mark_attendance_page(user):
         
         img_file = st.camera_input("Take a photo to mark attendance")
         
-        if img_file is not None:
-             # Caching the processing result to prevent duplicate heavy runs on state reload
-             image_key = f"verify_processed_{img_file.name}_{img_file.size}"
+             # Use MD5 hash of actual bytes — unique per photo
+             import hashlib
+             image_bytes = img_file.getvalue()
+             image_key = f"verify_{hashlib.md5(image_bytes).hexdigest()}"
              
              if image_key not in st.session_state:
                  with st.spinner("⚙️ Analyzing and verifying face..."):
