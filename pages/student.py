@@ -112,19 +112,20 @@ def show_mark_attendance_page(user):
         img_file = st.camera_input("Take a photo to mark attendance")
         
         if img_file is not None:
+            # Use MD5 hash of actual bytes — unique per photo
             import hashlib
             image_bytes = img_file.getvalue()
             image_key = f"verify_{hashlib.md5(image_bytes).hexdigest()}"
-
+            
             if image_key not in st.session_state:
                 with st.spinner("⚙️ Analyzing and verifying face..."):
                     from components import face_engine
                     img = Image.open(img_file)
-                    img.load()  # Force PIL decode
+                    img.load()  # Force PIL decode before thumbnail
                     img.thumbnail((640, 640))
-
+                    
                     encoding = face_engine.extract_face_encoding(img)
-
+                    
                     if encoding is None:
                         st.session_state[image_key] = ("error", "❌ No face detected. Look directly at the camera.")
                         st.error("❌ No face detected. Look directly at the camera.")
