@@ -14,17 +14,15 @@ TOLERANCE = 0.97
 @st.cache_resource
 def _load_mediapipe_face_mesh():
     """Cache MediaPipe FaceMesh solution in RAM (loads once per container)."""
-    # pyrefly: ignore [missing-import]
-    import mediapipe as mp  # noqa: PLC0415
-    return mp.solutions.face_mesh
+    from mediapipe.python.solutions import face_mesh  # noqa: PLC0415
+    return face_mesh
 
 
 @st.cache_resource
 def _load_mediapipe_face_detection():
     """Cache MediaPipe FaceDetection solution in RAM (loads once per container)."""
-    # pyrefly: ignore [missing-import]
-    import mediapipe as mp  # noqa: PLC0415
-    return mp.solutions.face_detection
+    from mediapipe.python.solutions import face_detection  # noqa: PLC0415
+    return face_detection
 
 
 def _encode_with_mediapipe(image_array):
