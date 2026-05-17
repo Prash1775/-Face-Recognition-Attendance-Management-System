@@ -1,5 +1,5 @@
 -- 1. Create Students Table
-CREATE TABLE students (
+CREATE TABLE IF NOT EXISTS students (
     id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     roll_number TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
@@ -15,7 +15,7 @@ CREATE TABLE students (
 );
 
 -- 2. Create Teachers Table
-CREATE TABLE teachers (
+CREATE TABLE IF NOT EXISTS teachers (
     id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     teacher_id TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE teachers (
 );
 
 -- 3. Create Teacher Assignments Table
-CREATE TABLE teacher_assignments (
+CREATE TABLE IF NOT EXISTS teacher_assignments (
     id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     teacher_id BIGINT REFERENCES teachers(id) ON DELETE CASCADE,
     course TEXT NOT NULL,
@@ -38,7 +38,7 @@ CREATE TABLE teacher_assignments (
 );
 
 -- 4. Create Sessions Table
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
     id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     teacher_id BIGINT REFERENCES teachers(id) ON DELETE CASCADE,
     course TEXT NOT NULL,
@@ -53,7 +53,7 @@ CREATE TABLE sessions (
 );
 
 -- 5. Create Attendance Table
-CREATE TABLE attendance (
+CREATE TABLE IF NOT EXISTS attendance (
     id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     session_id BIGINT REFERENCES sessions(id) ON DELETE CASCADE,
     student_id BIGINT REFERENCES students(id) ON DELETE CASCADE,

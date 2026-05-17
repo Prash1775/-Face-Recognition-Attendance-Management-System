@@ -1,5 +1,6 @@
 import streamlit as st
-# Top-level imports removed to prevent startup crashes
+from components import auth  # Import lightweight auth globally to avoid NameErrors
+# Top-level AI/ML imports removed to prevent startup crashes
 # They will be imported inside functions
 
 COLLEGE_NAME = "Department of Technology, Pune"
