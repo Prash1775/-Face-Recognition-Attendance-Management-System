@@ -19,7 +19,6 @@ ENV/
 
 # Database
 data/attendance.db
-.streamlit/
 
 # OS
 .DS_Store
