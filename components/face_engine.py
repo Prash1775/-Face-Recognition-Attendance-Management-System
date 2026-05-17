@@ -14,15 +14,15 @@ TOLERANCE = 0.97
 @st.cache_resource
 def _load_mediapipe_face_mesh():
     """Cache MediaPipe FaceMesh solution in RAM (loads once per container)."""
-    from mediapipe.python.solutions import face_mesh  # noqa: PLC0415
-    return face_mesh
+    import mediapipe as mp  # noqa: PLC0415
+    return mp.solutions.face_mesh
 
 
 @st.cache_resource
 def _load_mediapipe_face_detection():
     """Cache MediaPipe FaceDetection solution in RAM (loads once per container)."""
-    from mediapipe.python.solutions import face_detection  # noqa: PLC0415
-    return face_detection
+    import mediapipe as mp  # noqa: PLC0415
+    return mp.solutions.face_detection
 
 
 def _encode_with_mediapipe(image_array):
@@ -92,7 +92,8 @@ def extract_face_encoding(image_pil):
             else:
                 errors.append("MediaPipe: No face detected or multiple faces found.")
         except Exception as mp_err:
-            errors.append(f"MediaPipe failed: {mp_err}")
+            import traceback
+            errors.append(f"MediaPipe failed: {mp_err}\nTraceback:\n{traceback.format_exc()}")
 
         # --- FALLBACK: dlib HOG (Disabled to prevent multi-minute CPU hangs) ---
         errors.append("dlib HOG fallback skipped (disabled on cloud to prevent container hang).")
@@ -100,7 +101,8 @@ def extract_face_encoding(image_pil):
         return None
 
     except Exception as e:
-        errors.append(f"General encoding error: {e}")
+        import traceback
+        errors.append(f"General encoding error: {e}\nTraceback:\n{traceback.format_exc()}")
         print(f"Error in extract_face_encoding: {e}")
         return None
 

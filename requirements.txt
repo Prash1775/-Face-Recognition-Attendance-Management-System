@@ -9,8 +9,8 @@ plotly
 pillow
 numpy<2.0.0
 opencv-python-headless<4.9
-mediapipe
+mediapipe==0.10.14
 dlib-bin
 face_recognition @ git+https://github.com/thetoby9944/face_recognition.git
 
-# FORCE REBUILD: v2.0.3 - Bust cache to fetch latest code from github
+# FORCE REBUILD: v2.0.4 - Bust cache to fetch latest code from github
