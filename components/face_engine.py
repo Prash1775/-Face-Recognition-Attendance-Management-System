@@ -36,6 +36,47 @@ def enhance_lighting(image_array):
         print(f"Warning: CLAHE enhancement failed: {e}")
         return image_array
 
+def detect_face_mediapipe(image_array):
+    """
+    Detect face bounding box using MediaPipe Face Detection.
+    Extremely fast (10ms) and CPU-light compared to dlib's HOG.
+    Returns list of tuples [(top, right, bottom, left)] or empty list.
+    """
+    try:
+        import mediapipe as mp
+        mp_face_detection = mp.solutions.face_detection
+        
+        h, w, c = image_array.shape
+        
+        with mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5) as face_detection:
+            results = face_detection.process(image_array)
+            
+            if not results.detections:
+                return []
+                
+            face_locations = []
+            for detection in results.detections:
+                bbox = detection.location_data.relative_bounding_box
+                
+                # Convert relative coordinates to absolute pixel coordinates
+                top = int(bbox.ymin * h)
+                left = int(bbox.xmin * w)
+                bottom = int((bbox.ymin + bbox.height) * h)
+                right = int((bbox.xmin + bbox.width) * w)
+                
+                # Clip coordinates to image boundaries
+                top = max(0, top)
+                left = max(0, left)
+                bottom = min(h, bottom)
+                right = min(w, right)
+                
+                face_locations.append((top, right, bottom, left))
+                
+            return face_locations
+    except Exception as e:
+        print(f"Warning: MediaPipe face detection failed, using fallback: {e}")
+        return []
+
 def extract_face_encoding(image_pil):
     """
     Extract face encoding from PIL Image
@@ -59,9 +100,11 @@ def extract_face_encoding(image_pil):
             # Assume PIL Image is RGB, face_recognition expects RGB
             pass
         
-        # Find faces in image
+        # Find faces using MediaPipe first (extremely fast), fallback to dlib HOG
         import face_recognition
-        face_locations = face_recognition.face_locations(image_array, model=MODEL)
+        face_locations = detect_face_mediapipe(image_array)
+        if not face_locations:
+            face_locations = face_recognition.face_locations(image_array, model=MODEL)
         
         if len(face_locations) == 0:
             return None  # No face detected
@@ -172,9 +215,11 @@ def process_camera_frame(image_pil):
         # Upgrade: Apply lighting normalization
         image_array = enhance_lighting(image_array)
         
-        # Find all faces
+        # Find faces using MediaPipe first (extremely fast), fallback to dlib HOG
         import face_recognition
-        face_locations = face_recognition.face_locations(image_array, model=MODEL)
+        face_locations = detect_face_mediapipe(image_array)
+        if not face_locations:
+            face_locations = face_recognition.face_locations(image_array, model=MODEL)
         
         num_faces = len(face_locations)
         
