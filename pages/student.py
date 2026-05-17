@@ -7,6 +7,7 @@ from components import db
 
 def show_profile_page(user):
     st.header("Profile & Face Registration")
+    st.caption("🚀 Running Live Diagnostic Version: **d6aeafa (MediaPipe-Dynamic)**")
 
     student = db.get_student_by_roll(user['id'])
     if not student:
