@@ -12,3 +12,5 @@ opencv-python-headless<4.9
 mediapipe
 dlib-bin
 face_recognition @ git+https://github.com/thetoby9944/face_recognition.git
+
+# FORCE REBUILD: v2.0.2 - Bust cache to fetch latest code from github
