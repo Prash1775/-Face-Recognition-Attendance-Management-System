@@ -18,9 +18,10 @@ def show_profile_page(user):
     st.write(f"Roll Number: {student['roll_number']}")
     st.write(f"Email: {student['email']}")
 
-    img_file = None
-    if st.toggle("📷 Activate Webcam for Registration"):
-        img_file = st.camera_input("Take a photo with your webcam")
+    st.divider()
+    st.write("#### 📷 Face Registration")
+    st.info("Take a front-facing photo in good lighting to register or update your face encoding.")
+    img_file = st.camera_input("Take a photo with your webcam")
 
     if img_file is not None:
         # Use MD5 hash of actual image bytes as cache key.
