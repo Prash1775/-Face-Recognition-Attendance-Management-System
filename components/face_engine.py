@@ -3,282 +3,211 @@ from PIL import Image
 import io
 import streamlit as st
 
-# === UPGRADED CONFIGURATION ===
-# Face recognition tolerance (lower = stricter matching)
-TOLERANCE = 0.5  # Upgraded from 0.6 to minimize false positives
-MODEL = "hog"    # Reverted to "hog" to massively speed up cpu performance (CNN is too slow without a GPU)
-NUM_JITTERS = 1  # Reverted to 1 pass to prevent processing delays
+# === CONFIGURATION ===
+TOLERANCE = 0.97   # Cosine similarity threshold (higher = stricter matching)
+NUM_JITTERS = 1    # For dlib fallback only
 
-@st.cache_resource(show_spinner="⚙️ Loading face recognition models (first time only)...")
-def _load_face_recognition():
-    """
-    Load and cache the face_recognition module once in memory.
-    
-    dlib loads two large model files (~100MB each) from disk on every import.
-    On Streamlit Cloud's network filesystem, this takes 1-3 minutes per call.
-    By caching the module, it only loads ONCE at startup, then all subsequent
-    calls complete in under 2 seconds!
-    """
-    import face_recognition as fr
-    return fr
+# =========================================================================
+# FAST MediaPipe-based face mesh model (cached in RAM after first load)
+# MediaPipe runs in ~10ms on any CPU. dlib ResNet takes 30-120s on Streamlit
+# Cloud's throttled shared CPU. This cache ensures models load only ONCE.
+# =========================================================================
 
-def enhance_lighting(image_array):
-    """
-    Enhance the lighting and contrast of the face image using CLAHE.
-    This fixes issues with under-exposed or heavily shadowed cameras.
-    """
-    try:
-        # Ensure image is uint8
-        if image_array.dtype != np.uint8:
-            image_array = image_array.astype(np.uint8)
-            
-        # Convert RGB to LAB color space
-        import cv2
-        lab = cv2.cvtColor(image_array, cv2.COLOR_RGB2LAB)
-        l_channel, a_channel, b_channel = cv2.split(lab)
-        
-        # Apply Contrast Limited Adaptive Histogram Equalization (CLAHE)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-        cl = clahe.apply(l_channel)
-        
-        # Merge back
-        merged = cv2.merge((cl, a_channel, b_channel))
-        enhanced_rgb = cv2.cvtColor(merged, cv2.COLOR_LAB2RGB)
-        
-        return enhanced_rgb
-    except Exception as e:
-        print(f"Warning: CLAHE enhancement failed: {e}")
-        return image_array
+@st.cache_resource(show_spinner="⚙️ Loading face models (first time only)...")
+def _load_mediapipe_face_mesh():
+    """Cache MediaPipe FaceMesh solution in RAM (loads once per container)."""
+    import mediapipe as mp
+    return mp.solutions.face_mesh
 
-def detect_face_mediapipe(image_array):
-    """
-    Detect face bounding box using MediaPipe Face Detection.
-    Extremely fast (10ms) and CPU-light compared to dlib's HOG.
-    Returns list of tuples [(top, right, bottom, left)] or empty list.
-    """
-    try:
-        import mediapipe as mp
-        mp_face_detection = mp.solutions.face_detection
-        
-        h, w, c = image_array.shape
-        
-        with mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5) as face_detection:
-            results = face_detection.process(image_array)
-            
-            if not results.detections:
-                return []
-                
-            face_locations = []
-            for detection in results.detections:
-                bbox = detection.location_data.relative_bounding_box
-                
-                # Convert relative coordinates to absolute pixel coordinates
-                top = int(bbox.ymin * h)
-                left = int(bbox.xmin * w)
-                bottom = int((bbox.ymin + bbox.height) * h)
-                right = int((bbox.xmin + bbox.width) * w)
-                
-                # Clip coordinates to image boundaries
-                top = max(0, top)
-                left = max(0, left)
-                bottom = min(h, bottom)
-                right = min(w, right)
-                
-                face_locations.append((top, right, bottom, left))
-                
-            return face_locations
-    except Exception as e:
-        print(f"Warning: MediaPipe face detection failed, using fallback: {e}")
-        return []
+@st.cache_resource(show_spinner="⚙️ Loading face detection (first time only)...")
+def _load_mediapipe_face_detection():
+    """Cache MediaPipe FaceDetection solution in RAM (loads once per container)."""
+    import mediapipe as mp
+    return mp.solutions.face_detection
+
 
 def extract_face_encoding(image_pil):
     """
-    Extract face encoding from PIL Image
-    Returns face encoding as numpy array or None if no face detected
+    Extract face encoding from PIL Image using MediaPipe Face Mesh.
     
-    Args:
-        image_pil: PIL Image object
+    Uses 468 3D facial landmarks as the encoding vector, normalized to be
+    invariant to position and scale. Cosine similarity is used for matching.
+    
+    Falls back to dlib HOG if MediaPipe fails.
     
     Returns:
-        numpy array (128-d face encoding) or None
+        numpy array (encoding) or None if no face detected
     """
     try:
-        # Convert PIL Image to numpy array
-        image_array = np.array(image_pil)
-        
-        # Upgrade: Apply lighting normalization
-        image_array = enhance_lighting(image_array)
-        
-        # Convert RGB to BGR if needed (PIL is RGB by default)
-        if len(image_array.shape) == 3 and image_array.shape[2] == 3:
-            # Assume PIL Image is RGB, face_recognition expects RGB
-            pass
-        
-        # Find faces using MediaPipe first (extremely fast), fallback to dlib HOG
-        face_recognition = _load_face_recognition()
-        face_locations = detect_face_mediapipe(image_array)
-        if not face_locations:
-            face_locations = face_recognition.face_locations(image_array, model=MODEL)
-        
-        if len(face_locations) == 0:
-            return None  # No face detected
-        
-        if len(face_locations) > 1:
-            # Multiple faces - return None and let user know
-            return None
-        
-        # Upgrade: Extract robust face encoding for the single face using num_jitters
-        face_encodings = face_recognition.face_encodings(
-            image_array, 
-            face_locations, 
-            num_jitters=NUM_JITTERS
-        )
-        
-        if len(face_encodings) > 0:
-            return face_encodings[0]  # Return first (and only) face encoding
-        
+        image_array = np.array(image_pil.convert("RGB"))
+
+        # --- PRIMARY PATH: MediaPipe Face Mesh (fast, ~10ms) ---
+        mp_face_mesh = _load_mediapipe_face_mesh()
+        with mp_face_mesh.FaceMesh(
+            static_image_mode=True,
+            max_num_faces=1,
+            refine_landmarks=False,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        ) as face_mesh:
+            results = face_mesh.process(image_array)
+
+        if results.multi_face_landmarks and len(results.multi_face_landmarks) == 1:
+            landmarks = results.multi_face_landmarks[0]
+
+            # Extract x, y coordinates for all 468 landmarks
+            coords = []
+            for lm in landmarks.landmark:
+                coords.extend([lm.x, lm.y])
+
+            encoding = np.array(coords, dtype=np.float64)
+
+            # Normalize: center and scale for pose/size invariance
+            encoding = (encoding - encoding.mean()) / (encoding.std() + 1e-8)
+            return encoding
+
+        # Multiple faces or no detection from FaceMesh
+        if results.multi_face_landmarks and len(results.multi_face_landmarks) > 1:
+            return None  # Multiple faces — reject
+
+        # --- FALLBACK PATH: dlib HOG (slow, but safe) ---
+        print("MediaPipe found no face, trying dlib fallback...")
+        try:
+            import face_recognition
+            face_locations = face_recognition.face_locations(image_array, model="hog")
+            if len(face_locations) != 1:
+                return None
+            face_encodings = face_recognition.face_encodings(image_array, face_locations, num_jitters=NUM_JITTERS)
+            if face_encodings:
+                # Normalize dlib encoding to unit vector so cosine similarity works
+                enc = np.array(face_encodings[0], dtype=np.float64)
+                enc = enc / (np.linalg.norm(enc) + 1e-8)
+                return enc
+        except Exception as dlib_err:
+            print(f"dlib fallback also failed: {dlib_err}")
+
         return None
-    
+
     except Exception as e:
         print(f"Error extracting face encoding: {e}")
         return None
 
+
 def verify_face(stored_encoding, capture_encoding, tolerance=TOLERANCE):
     """
-    Verify if two face encodings match
-    
-    Args:
-        stored_encoding: numpy array (face encoding from database)
-        capture_encoding: numpy array (face encoding from current capture)
-        tolerance: matching tolerance (lower = stricter)
-    
+    Verify if two face encodings match using cosine similarity.
+
+    Works with both MediaPipe (936-d) and dlib (128-d normalized) encodings.
+    Cosine similarity of 1.0 = identical, ~0.97+ = same person.
+
     Returns:
         bool: True if faces match, False otherwise
     """
     try:
         if stored_encoding is None or capture_encoding is None:
             return False
-        
-        # Calculate face distance
-        face_recognition = _load_face_recognition()
-        distance = face_recognition.face_distance([stored_encoding], capture_encoding)[0]
-        
-        # Mathematically map distance to a standard Percentage logic (0.0 to 100.0%)
-        if distance > tolerance:
-            accuracy_percent = (1.0 - distance) / (1.0 - tolerance) * 50.0
-        else:
-            accuracy_percent = 100.0 - (distance / tolerance) * 50.0
-            
-        # Hard limits
-        accuracy = max(0.0, min(100.0, accuracy_percent))
-        is_match = distance <= tolerance
-        
-        # Print to Terminal explicitly!
+
+        stored = np.array(stored_encoding, dtype=np.float64)
+        capture = np.array(capture_encoding, dtype=np.float64)
+
+        # Handle dimension mismatch (encoding type changed between registration & verification)
+        if stored.shape != capture.shape:
+            print(f"Encoding dimension mismatch: stored={stored.shape}, capture={capture.shape}. Rejecting.")
+            return False
+
+        # Cosine similarity
+        dot = np.dot(stored, capture)
+        norm = np.linalg.norm(stored) * np.linalg.norm(capture)
+        similarity = dot / (norm + 1e-8)
+
+        is_match = similarity >= tolerance
+
         print("-" * 45)
-        print("ACTIVE AI MODEL METRICS")
-        print(f"-> Engine Target: {MODEL.upper()}")
-        print(f"-> Confidence Match: {accuracy:.2f}%")
-        print(f"-> Action Taken: {'ATTENDANCE APPROVED [OK]' if is_match else 'ATTENDANCE REJECTED [X]'}")
+        print("FACE VERIFICATION METRICS")
+        print(f"-> Engine: MediaPipe FaceMesh + Cosine Similarity")
+        print(f"-> Similarity Score: {similarity:.4f}")
+        print(f"-> Threshold: {tolerance}")
+        print(f"-> Decision: {'APPROVED ✅' if is_match else 'REJECTED ❌'}")
         print("-" * 45)
-        
+
         return is_match
-    
+
     except Exception as e:
         print(f"Error verifying face: {e}")
         return False
 
+
 def compare_faces_batch(known_encodings, capture_encoding, tolerance=TOLERANCE):
     """
-    Compare one face against multiple known faces
-    
-    Args:
-        known_encodings: list of numpy arrays
-        capture_encoding: numpy array
-        tolerance: matching tolerance
-    
+    Compare one face against multiple known faces using cosine similarity.
+
     Returns:
-        list of bools and distances
+        list of bools and list of distances (1 - similarity)
     """
     try:
         if not known_encodings or capture_encoding is None:
             return [], []
-        
-        face_recognition = _load_face_recognition()
-        results = face_recognition.compare_faces(known_encodings, capture_encoding, tolerance=tolerance)
-        distances = face_recognition.face_distance(known_encodings, capture_encoding)
-        
+
+        capture = np.array(capture_encoding, dtype=np.float64)
+        results = []
+        distances = []
+
+        for stored in known_encodings:
+            s = np.array(stored, dtype=np.float64)
+            if s.shape != capture.shape:
+                results.append(False)
+                distances.append(1.0)
+                continue
+            dot = np.dot(s, capture)
+            norm = np.linalg.norm(s) * np.linalg.norm(capture)
+            similarity = dot / (norm + 1e-8)
+            results.append(similarity >= tolerance)
+            distances.append(1.0 - similarity)
+
         return results, distances
-    
+
     except Exception as e:
         print(f"Error comparing faces: {e}")
         return [], []
 
+
 def process_camera_frame(image_pil):
     """
-    Process camera input for face detection
-    
-    Args:
-        image_pil: PIL Image from st.camera_input()
-    
+    Process camera input for face detection (used for live checking).
+
     Returns:
-        dict with face_encoding, face_detected, num_faces
+        dict with face_encoding, face_detected, num_faces, message
     """
     try:
-        image_array = np.array(image_pil)
-        
-        # Upgrade: Apply lighting normalization
-        image_array = enhance_lighting(image_array)
-        
-        # Find faces using MediaPipe first (extremely fast), fallback to dlib HOG
-        face_recognition = _load_face_recognition()
-        face_locations = detect_face_mediapipe(image_array)
-        if not face_locations:
-            face_locations = face_recognition.face_locations(image_array, model=MODEL)
-        
-        num_faces = len(face_locations)
-        
+        image_array = np.array(image_pil.convert("RGB"))
+
+        mp_face_detection = _load_mediapipe_face_detection()
+        with mp_face_detection.FaceDetection(
+            model_selection=0, min_detection_confidence=0.5
+        ) as face_detector:
+            detection_results = face_detector.process(image_array)
+
+        num_faces = len(detection_results.detections) if detection_results.detections else 0
+
         if num_faces == 0:
-            return {
-                'face_encoding': None,
-                'face_detected': False,
-                'num_faces': 0,
-                'message': 'No face detected. Please try again.'
-            }
-        
+            return {'face_encoding': None, 'face_detected': False,
+                    'num_faces': 0, 'message': 'No face detected. Please try again.'}
+
         if num_faces > 1:
-            return {
-                'face_encoding': None,
-                'face_detected': False,
-                'num_faces': num_faces,
-                'message': f'Multiple faces detected ({num_faces}). Show only your face.'
-            }
-        
-        # Upgrade: Extract robust encoding for verification
-        face_encodings = face_recognition.face_encodings(
-            image_array, 
-            face_locations,
-            num_jitters=NUM_JITTERS
-        )
-        
-        if len(face_encodings) == 0:
-            return {
-                'face_encoding': None,
-                'face_detected': False,
-                'num_faces': 1,
-                'message': 'Face detected but could not extract features. Try again.'
-            }
-        
-        return {
-            'face_encoding': face_encodings[0],
-            'face_detected': True,
-            'num_faces': 1,
-            'message': 'Face captured successfully!'
-        }
-    
+            return {'face_encoding': None, 'face_detected': False,
+                    'num_faces': num_faces,
+                    'message': f'Multiple faces detected ({num_faces}). Show only your face.'}
+
+        # Single face — extract encoding
+        encoding = extract_face_encoding(image_pil)
+        if encoding is None:
+            return {'face_encoding': None, 'face_detected': False,
+                    'num_faces': 1,
+                    'message': 'Face detected but encoding failed. Try again.'}
+
+        return {'face_encoding': encoding, 'face_detected': True,
+                'num_faces': 1, 'message': 'Face captured successfully!'}
+
     except Exception as e:
-        return {
-            'face_encoding': None,
-            'face_detected': False,
-            'num_faces': 0,
-            'message': f'Error processing image: {e}'
-        }
+        return {'face_encoding': None, 'face_detected': False,
+                'num_faces': 0, 'message': f'Error: {e}'}
