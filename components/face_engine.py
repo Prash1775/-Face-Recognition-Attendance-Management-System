@@ -31,19 +31,38 @@ def _encode_with_mediapipe(image_array):
     """
     Internal helper: extract 936-d normalized landmark encoding via MediaPipe Face Mesh.
     Returns numpy array or None if no face / multiple faces detected.
+    Uses FaceDetection as a quick pre-check before running FaceMesh.
     """
+    # --- STAGE 1: Quick face presence check with FaceDetection ---
+    try:
+        mp_face_detection = _load_mediapipe_face_detection()
+        with mp_face_detection.FaceDetection(
+            model_selection=0,
+            min_detection_confidence=0.2,  # Very permissive — catch even dim/angled faces
+        ) as face_detector:
+            det_results = face_detector.process(image_array)
+
+        if not det_results.detections:
+            return None  # No face at all
+
+        if len(det_results.detections) > 1:
+            return None  # Multiple faces — reject
+
+    except Exception as det_err:
+        print(f"FaceDetection pre-check failed, skipping to FaceMesh: {det_err}")
+
+    # --- STAGE 2: Extract precise landmarks with FaceMesh ---
     mp_face_mesh = _load_mediapipe_face_mesh()
     with mp_face_mesh.FaceMesh(
-        static_image_mode=True,
+        static_image_mode=True,  # Single image — no tracking
         max_num_faces=1,
         refine_landmarks=False,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
+        min_detection_confidence=0.2,  # Very permissive
     ) as face_mesh:
         results = face_mesh.process(image_array)
 
     if not results.multi_face_landmarks:
-        return None  # No face found
+        return None
 
     if len(results.multi_face_landmarks) > 1:
         return None  # Multiple faces — reject
@@ -213,7 +232,7 @@ def process_camera_frame(image_pil):
 
         mp_face_detection = _load_mediapipe_face_detection()
         with mp_face_detection.FaceDetection(
-            model_selection=0, min_detection_confidence=0.5
+            model_selection=0, min_detection_confidence=0.2
         ) as face_detector:
             detection_results = face_detector.process(image_array)
 
