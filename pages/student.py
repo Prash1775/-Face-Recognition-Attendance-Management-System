@@ -108,13 +108,17 @@ def show_mark_attendance_page(user):
         return
 
     if pin_valid:
+        success_key = f"success_marked_{selected_session['id']}"
         already_marked = db.check_attendance_exists(
             selected_session['id'],
             student['id']
         )
 
         if already_marked:
-            st.warning("⚠️ Attendance already marked for this session")
+            if st.session_state.get(success_key):
+                st.success("✅ Attendance marked successfully!")
+            else:
+                st.warning("⚠️ Attendance already marked for this session")
             return
             
         st.divider()
@@ -149,6 +153,7 @@ def show_mark_attendance_page(user):
                         else:
                             success, msg = db.mark_attendance(selected_session['id'], student['id'], student['roll_number'], 'face_verified')
                             if success:
+                                st.session_state[success_key] = True
                                 st.session_state[image_key] = ("success", "✅ Attendance marked successfully!")
                                 st.success("✅ Attendance marked successfully!")
                                 st.rerun()
