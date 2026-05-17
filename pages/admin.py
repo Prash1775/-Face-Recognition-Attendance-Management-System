@@ -50,7 +50,6 @@ def show_admin_login():
                     st.rerun()
                 else:
                     st.error(message)
-        st.info("**Default Password:** admin123 (Please change this in production)")
 
 def show_admin_dashboard():
     """Main admin dashboard"""

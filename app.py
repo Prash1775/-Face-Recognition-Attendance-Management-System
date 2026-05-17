@@ -182,7 +182,6 @@ def show_admin_login():
                         st.rerun()
                     else:
                         st.error(message)
-        st.info("**Default Password:** admin123 (Please change this in production)")
 
 def show_role_based_page():
     """Route to appropriate page based on user role"""
