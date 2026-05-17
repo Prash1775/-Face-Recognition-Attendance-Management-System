@@ -111,47 +111,45 @@ def show_mark_attendance_page(user):
         
         img_file = st.camera_input("Take a photo to mark attendance")
         
-             # Use MD5 hash of actual bytes — unique per photo
-             import hashlib
-             image_bytes = img_file.getvalue()
-             image_key = f"verify_{hashlib.md5(image_bytes).hexdigest()}"
-             
-             if image_key not in st.session_state:
-                 with st.spinner("⚙️ Analyzing and verifying face..."):
-                     from components import face_engine
-                     img = Image.open(img_file)
-                     
-                     # OPTIMIZATION: Downscale high-resolution webcam inputs (e.g. 1080p -> 640px max)
-                     # This speeds up CPU processing by 9x!
-                     img.thumbnail((640, 640))
-                     
-                     encoding = face_engine.extract_face_encoding(img)
-                     
-                     if encoding is None:
-                         st.session_state[image_key] = ("error", "❌ No face detected. Look directly at the camera.")
-                         st.error("❌ No face detected. Look directly at the camera.")
-                     else:
-                         match = face_engine.verify_face(student['face_encoding'], encoding)
-                         if not match:
-                             st.session_state[image_key] = ("error", "❌ Face does not match registered student.")
-                             st.error("❌ Face does not match registered student.")
-                         else:
-                             success, msg = db.mark_attendance(selected_session['id'], student['id'], student['roll_number'], 'face_verified')
-                             if success:
-                                 st.session_state[image_key] = ("success", "✅ Attendance marked successfully!")
-                                 st.success("✅ Attendance marked successfully!")
-                                 st.rerun()
-                             else:
-                                 st.session_state[image_key] = ("warning", msg)
-                                 st.warning(msg)
-             else:
-                 status, message = st.session_state[image_key]
-                 if status == "success":
-                     st.success(message)
-                 elif status == "warning":
-                     st.warning(message)
-                 else:
-                     st.error(message)
+        if img_file is not None:
+            import hashlib
+            image_bytes = img_file.getvalue()
+            image_key = f"verify_{hashlib.md5(image_bytes).hexdigest()}"
+
+            if image_key not in st.session_state:
+                with st.spinner("⚙️ Analyzing and verifying face..."):
+                    from components import face_engine
+                    img = Image.open(img_file)
+                    img.load()  # Force PIL decode
+                    img.thumbnail((640, 640))
+
+                    encoding = face_engine.extract_face_encoding(img)
+
+                    if encoding is None:
+                        st.session_state[image_key] = ("error", "❌ No face detected. Look directly at the camera.")
+                        st.error("❌ No face detected. Look directly at the camera.")
+                    else:
+                        match = face_engine.verify_face(student['face_encoding'], encoding)
+                        if not match:
+                            st.session_state[image_key] = ("error", "❌ Face does not match registered student.")
+                            st.error("❌ Face does not match registered student.")
+                        else:
+                            success, msg = db.mark_attendance(selected_session['id'], student['id'], student['roll_number'], 'face_verified')
+                            if success:
+                                st.session_state[image_key] = ("success", "✅ Attendance marked successfully!")
+                                st.success("✅ Attendance marked successfully!")
+                                st.rerun()
+                            else:
+                                st.session_state[image_key] = ("warning", msg)
+                                st.warning(msg)
+            else:
+                status, message = st.session_state[image_key]
+                if status == "success":
+                    st.success(message)
+                elif status == "warning":
+                    st.warning(message)
+                else:
+                    st.error(message)
 
 
 def show_attendance_view(user):
