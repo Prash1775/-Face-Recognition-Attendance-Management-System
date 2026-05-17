@@ -1,12 +1,26 @@
 import numpy as np
 from PIL import Image
 import io
+import streamlit as st
 
 # === UPGRADED CONFIGURATION ===
 # Face recognition tolerance (lower = stricter matching)
 TOLERANCE = 0.5  # Upgraded from 0.6 to minimize false positives
 MODEL = "hog"    # Reverted to "hog" to massively speed up cpu performance (CNN is too slow without a GPU)
 NUM_JITTERS = 1  # Reverted to 1 pass to prevent processing delays
+
+@st.cache_resource(show_spinner="⚙️ Loading face recognition models (first time only)...")
+def _load_face_recognition():
+    """
+    Load and cache the face_recognition module once in memory.
+    
+    dlib loads two large model files (~100MB each) from disk on every import.
+    On Streamlit Cloud's network filesystem, this takes 1-3 minutes per call.
+    By caching the module, it only loads ONCE at startup, then all subsequent
+    calls complete in under 2 seconds!
+    """
+    import face_recognition as fr
+    return fr
 
 def enhance_lighting(image_array):
     """
@@ -101,7 +115,7 @@ def extract_face_encoding(image_pil):
             pass
         
         # Find faces using MediaPipe first (extremely fast), fallback to dlib HOG
-        import face_recognition
+        face_recognition = _load_face_recognition()
         face_locations = detect_face_mediapipe(image_array)
         if not face_locations:
             face_locations = face_recognition.face_locations(image_array, model=MODEL)
@@ -146,7 +160,7 @@ def verify_face(stored_encoding, capture_encoding, tolerance=TOLERANCE):
             return False
         
         # Calculate face distance
-        import face_recognition
+        face_recognition = _load_face_recognition()
         distance = face_recognition.face_distance([stored_encoding], capture_encoding)[0]
         
         # Mathematically map distance to a standard Percentage logic (0.0 to 100.0%)
@@ -189,7 +203,7 @@ def compare_faces_batch(known_encodings, capture_encoding, tolerance=TOLERANCE):
         if not known_encodings or capture_encoding is None:
             return [], []
         
-        import face_recognition
+        face_recognition = _load_face_recognition()
         results = face_recognition.compare_faces(known_encodings, capture_encoding, tolerance=tolerance)
         distances = face_recognition.face_distance(known_encodings, capture_encoding)
         
@@ -216,7 +230,7 @@ def process_camera_frame(image_pil):
         image_array = enhance_lighting(image_array)
         
         # Find faces using MediaPipe first (extremely fast), fallback to dlib HOG
-        import face_recognition
+        face_recognition = _load_face_recognition()
         face_locations = detect_face_mediapipe(image_array)
         if not face_locations:
             face_locations = face_recognition.face_locations(image_array, model=MODEL)
