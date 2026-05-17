@@ -95,7 +95,14 @@ def extract_face_encoding(image_pil):
         numpy.ndarray or None if no face detected
     """
     try:
-        image_array = np.array(image_pil.convert("RGB"))
+        # Force PIL to fully decode the image — thumbnail() is lazy and may
+        # not have decoded the JPEG data yet. Without load(), MediaPipe gets
+        # an empty buffer and finds no face even when one is clearly visible.
+        pil_rgb = image_pil.convert("RGB")
+        pil_rgb.load()  # Forces actual JPEG/PNG decode into memory
+
+        # Create a contiguous writable uint8 array (required by MediaPipe)
+        image_array = np.ascontiguousarray(pil_rgb, dtype=np.uint8)
 
         # --- PRIMARY: MediaPipe (fast) ---
         encoding = _encode_with_mediapipe(image_array)
@@ -114,7 +121,6 @@ def extract_face_encoding(image_pil):
             )
             if face_encodings:
                 enc = np.array(face_encodings[0], dtype=np.float64)
-                # Normalize to unit vector so cosine similarity is comparable
                 enc = enc / (np.linalg.norm(enc) + 1e-8)
                 return enc
         except Exception as dlib_err:
@@ -228,7 +234,9 @@ def process_camera_frame(image_pil):
         dict with keys: face_encoding, face_detected, num_faces, message
     """
     try:
-        image_array = np.array(image_pil.convert("RGB"))
+        pil_rgb = image_pil.convert("RGB")
+        pil_rgb.load()  # Force decode
+        image_array = np.ascontiguousarray(pil_rgb, dtype=np.uint8)
 
         mp_face_detection = _load_mediapipe_face_detection()
         with mp_face_detection.FaceDetection(
