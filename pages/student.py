@@ -45,12 +45,22 @@ def show_profile_page(user):
                     st.rerun()
                 else:
                     st.session_state[image_key] = "fail"
-                    st.error("❌ No face detected. Please look directly at the camera in good lighting.")
+                    # Capture diagnostic errors
+                    diag_errs = st.session_state.get("face_diagnostic_errors", [])
+                    st.session_state[f"{image_key}_diags"] = diag_errs
+                    if diag_errs:
+                        st.error("❌ Face detection failed details:\n" + "\n".join([f"- {err}" for err in diag_errs]))
+                    else:
+                        st.error("❌ No face detected. Please look directly at the camera in good lighting.")
         else:
             if st.session_state[image_key] == "success":
                 st.success("✅ Face registered successfully! You can turn off the webcam toggle now.")
             else:
-                st.error("❌ No face detected. Please clear the photo and try again.")
+                diag_errs = st.session_state.get(f"{image_key}_diags", [])
+                if diag_errs:
+                    st.error("❌ Face detection failed details:\n" + "\n".join([f"- {err}" for err in diag_errs]))
+                else:
+                    st.error("❌ No face detected. Please clear the photo and try again.")
 
 
 def show_mark_attendance_page(user):

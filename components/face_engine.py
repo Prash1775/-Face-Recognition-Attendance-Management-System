@@ -94,10 +94,10 @@ def extract_face_encoding(image_pil):
     Returns:
         numpy.ndarray or None if no face detected
     """
+    errors = []
+    st.session_state["face_diagnostic_errors"] = errors
     try:
-        # Force PIL to fully decode the image — thumbnail() is lazy and may
-        # not have decoded the JPEG data yet. Without load(), MediaPipe gets
-        # an empty buffer and finds no face even when one is clearly visible.
+        # Force PIL to fully decode the image
         pil_rgb = image_pil.convert("RGB")
         pil_rgb.load()  # Forces actual JPEG/PNG decode into memory
 
@@ -105,9 +105,14 @@ def extract_face_encoding(image_pil):
         image_array = np.ascontiguousarray(pil_rgb, dtype=np.uint8)
 
         # --- PRIMARY: MediaPipe (fast) ---
-        encoding = _encode_with_mediapipe(image_array)
-        if encoding is not None:
-            return encoding
+        try:
+            encoding = _encode_with_mediapipe(image_array)
+            if encoding is not None:
+                return encoding
+            else:
+                errors.append("MediaPipe: No face detected or more than 1 face present.")
+        except Exception as mp_err:
+            errors.append(f"MediaPipe failed: {mp_err}")
 
         # --- FALLBACK: dlib HOG (slow on cloud, but safe) ---
         print("MediaPipe found no face — trying dlib fallback...")
@@ -115,7 +120,9 @@ def extract_face_encoding(image_pil):
             import face_recognition  # noqa: PLC0415
             face_locations = face_recognition.face_locations(image_array, model="hog")
             if len(face_locations) != 1:
+                errors.append(f"dlib HOG: Detected {len(face_locations)} faces (expected exactly 1).")
                 return None
+            
             face_encodings = face_recognition.face_encodings(
                 image_array, face_locations, num_jitters=1
             )
@@ -123,12 +130,15 @@ def extract_face_encoding(image_pil):
                 enc = np.array(face_encodings[0], dtype=np.float64)
                 enc = enc / (np.linalg.norm(enc) + 1e-8)
                 return enc
+            else:
+                errors.append("dlib HOG: Bounding box found, but face encoding step failed.")
         except Exception as dlib_err:
-            print(f"dlib fallback also failed: {dlib_err}")
+            errors.append(f"dlib HOG failed: {dlib_err}")
 
         return None
 
     except Exception as e:
+        errors.append(f"General encoding error: {e}")
         print(f"Error in extract_face_encoding: {e}")
         return None
 
