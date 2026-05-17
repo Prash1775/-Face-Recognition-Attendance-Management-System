@@ -1,8 +1,8 @@
-streamlit==1.35.0
-supabase==2.30.0
+streamlit
+supabase
 postgrest
 python-dotenv
-pandas==2.2.2
+pandas
 pytz
 fpdf2
 plotly
@@ -11,4 +11,4 @@ numpy<2.0.0
 opencv-python-headless<4.9
 mediapipe
 dlib-bin
-face-recognition
+face_recognition @ git+https://github.com/thetoby9944/face_recognition.git
