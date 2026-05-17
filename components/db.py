@@ -12,8 +12,21 @@ DB_PATH = os.path.join(BASE_DIR, "..", "data", "attendance.db")
 DB_PATH = os.path.abspath(DB_PATH)
 
 # Supabase configuration (optional fallback to SQLite)
-SUPABASE_URL = st.secrets.get("SUPABASE_URL")
-SUPABASE_KEY = st.secrets.get("SUPABASE_KEY")
+SUPABASE_URL = None
+SUPABASE_KEY = None
+
+try:
+    SUPABASE_URL = st.secrets.get("SUPABASE_URL")
+    SUPABASE_KEY = st.secrets.get("SUPABASE_KEY")
+except Exception:
+    # Fallback to local environment variables or .env if secrets.toml is missing (local mode)
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 _supabase: Client = None
 if SUPABASE_URL and SUPABASE_KEY:
