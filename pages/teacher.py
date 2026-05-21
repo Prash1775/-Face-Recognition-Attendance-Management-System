@@ -244,16 +244,6 @@ def show_attendance_view(user):
         st.info("No matching summary data available")
         return
 
-    # Render table header
-    header_cols = st.columns([1.5, 2, 2, 2, 1, 1, 1])
-    header_cols[0].markdown("**Action**")
-    header_cols[1].markdown("**Date**")
-    header_cols[2].markdown("**Subject**")
-    header_cols[3].markdown("**Course**")
-    header_cols[4].markdown("**Total**")
-    header_cols[5].markdown("**Present**")
-    header_cols[6].markdown("**Absent**")
-    
     st.divider()
 
     for s in filtered_sessions:
@@ -263,19 +253,18 @@ def show_attendance_view(user):
             present = summary['attended']
             absent = summary['absent']
             
-            cols = st.columns([1.5, 2, 2, 2, 1, 1, 1])
-            
-            if cols[0].button("Show Attendance", key=f"btn_show_{s['id']}"):
-                show_detailed_attendance_dialog(s["id"], s["subject"], s["_date_str"])
+            with st.container(border=True):
+                col1, col2 = st.columns([3, 1])
                 
-            cols[1].write(s['_date_str'])
-            cols[2].write(s["subject"])
-            cols[3].write(s['_course_str'])
-            cols[4].write(str(total))
-            cols[5].write(str(present))
-            cols[6].write(str(absent))
-            
-            st.divider()
+                with col1:
+                    st.markdown(f"#### {s['subject']}")
+                    st.markdown(f"**Course:** {s['_course_str']} | **Date:** {s['_date_str']}")
+                    st.caption(f"👥 **Total:** {total} &nbsp;&nbsp; ✅ **Present:** {present} &nbsp;&nbsp; ❌ **Absent:** {absent}")
+                    
+                with col2:
+                    st.write("") # Vertical spacing
+                    if st.button("Show Attendance", key=f"btn_show_{s['id']}", use_container_width=True):
+                        show_detailed_attendance_dialog(s["id"], s["subject"], s["_date_str"])
 
 
 def show_session_history(user):
