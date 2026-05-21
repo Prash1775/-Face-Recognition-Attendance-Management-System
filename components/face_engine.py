@@ -3,7 +3,7 @@ import streamlit as st
 
 # === CONFIGURATION ===
 # Cosine similarity threshold for face matching (range 0.0-1.0, higher = stricter)
-TOLERANCE = 0.90
+TOLERANCE = 0.85
 
 # =========================================================================
 # FAST MediaPipe-based face mesh model (cached in RAM after first load)
