@@ -619,6 +619,41 @@ def get_student_attendance_by_roll(roll_number):
         conn.close()
         return [dict(row) for row in rows]
 
+def get_attendance_by_session(session_id):
+    """Return detailed attendance rows (name, roll_number, status, mark_time) for a given session."""
+    if is_supabase():
+        response = (
+            _supabase.table("attendance")
+            .select("*, students(name, roll_number)")
+            .eq("session_id", session_id)
+            .execute()
+        )
+        rows = []
+        for row in response.data:
+            student = row.get("students", {})
+            rows.append({
+                "name": student.get("name"),
+                "roll_number": student.get("roll_number"),
+                "status": row.get("verification_status"),
+                "mark_time": row.get("mark_time"),
+            })
+        return rows
+    else:
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT s.name, s.roll_number, a.verification_status, a.mark_time
+            FROM attendance a
+            JOIN students s ON a.student_id = s.id
+            WHERE a.session_id = ?
+            """,
+            (session_id,),
+        )
+        rows = [dict(r) for r in c.fetchall()]
+        conn.close()
+        return rows
+
 def get_attendance_logs(teacher_db_id=None, course=None, date_from=None, date_to=None):
     if is_supabase():
         query = _supabase.table("attendance").select("*, students(name, roll_number), sessions(*)")

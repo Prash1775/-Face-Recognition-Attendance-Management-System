@@ -120,10 +120,16 @@ def show_mark_attendance_page(user):
             else:
                 st.warning("⚠️ Attendance already marked for this session")
             return
-            
+        
+        if "liveness_challenge" not in st.session_state:
+            from components.liveness import generate_liveness_challenge
+            st.session_state.liveness_challenge = generate_liveness_challenge()
+        
+        challenge_fingers = st.session_state.liveness_challenge
+
         st.divider()
-        st.write("#### 📷 Face Check")
-        st.info("Look straight into the camera to automatically mark attendance.")
+        st.write("#### 📷 Face & Liveness Check")
+        st.info(f"To verify liveness, look straight into the camera and hold up **{challenge_fingers} finger{'s' if challenge_fingers > 1 else ''}**.")
         
         img_file = st.camera_input("Take a photo to mark attendance")
         
@@ -134,32 +140,48 @@ def show_mark_attendance_page(user):
             image_key = f"verify_{hashlib.md5(image_bytes).hexdigest()}"
             
             if image_key not in st.session_state:
-                with st.spinner("⚙️ Analyzing and verifying face..."):
+                with st.spinner("⚙️ Analyzing and verifying face & liveness..."):
                     from components import face_engine
+                    from components.liveness import count_fingers
+                    
                     img = Image.open(img_file)
                     img.load()  # Force PIL decode before thumbnail
-                    img.thumbnail((640, 640))
                     
-                    encoding = face_engine.extract_face_encoding(img)
+                    # Convert PIL to numpy for mediapipe liveness check
+                    img_array = np.array(img)
+                    detected_fingers = count_fingers(img_array)
                     
-                    if encoding is None:
-                        st.session_state[image_key] = ("error", "❌ No face detected. Look directly at the camera.")
-                        st.error("❌ No face detected. Look directly at the camera.")
+                    if detected_fingers == -1:
+                        st.session_state[image_key] = ("error", "❌ No hand detected. Please hold up your fingers visibly in the camera.")
+                        st.error("❌ No hand detected. Please hold up your fingers visibly in the camera.")
+                    elif detected_fingers != challenge_fingers:
+                        st.session_state[image_key] = ("error", f"❌ Liveness failed! Expected {challenge_fingers} fingers, but detected {detected_fingers}.")
+                        st.error(f"❌ Liveness failed! Expected {challenge_fingers} fingers, but detected {detected_fingers}.")
                     else:
-                        match = face_engine.verify_face(student['face_encoding'], encoding)
-                        if not match:
-                            st.session_state[image_key] = ("error", "❌ Face does not match registered student.")
-                            st.error("❌ Face does not match registered student.")
+                        # Proceed with face recognition since liveness passed
+                        img.thumbnail((640, 640))
+                        encoding = face_engine.extract_face_encoding(img)
+                        
+                        if encoding is None:
+                            st.session_state[image_key] = ("error", "❌ No face detected. Look directly at the camera.")
+                            st.error("❌ No face detected. Look directly at the camera.")
                         else:
-                            success, msg = db.mark_attendance(selected_session['id'], student['id'], student['roll_number'], 'face_verified')
-                            if success:
-                                st.session_state[success_key] = True
-                                st.session_state[image_key] = ("success", "✅ Attendance marked successfully!")
-                                st.success("✅ Attendance marked successfully!")
-                                st.rerun()
+                            match = face_engine.verify_face(student['face_encoding'], encoding)
+                            if not match:
+                                st.session_state[image_key] = ("error", "❌ Face does not match registered student.")
+                                st.error("❌ Face does not match registered student.")
                             else:
-                                st.session_state[image_key] = ("warning", msg)
-                                st.warning(msg)
+                                success, msg = db.mark_attendance(selected_session['id'], student['id'], student['roll_number'], 'face_verified')
+                                if success:
+                                    st.session_state[success_key] = True
+                                    st.session_state[image_key] = ("success", "✅ Attendance marked successfully!")
+                                    st.success("✅ Attendance marked successfully!")
+                                    # Clear liveness challenge so a new one is generated next time
+                                    del st.session_state.liveness_challenge
+                                    st.rerun()
+                                else:
+                                    st.session_state[image_key] = ("warning", msg)
+                                    st.warning(msg)
             else:
                 status, message = st.session_state[image_key]
                 if status == "success":

@@ -151,6 +151,41 @@ def show_active_sessions(user):
                 st.rerun()
 
 
+@st.dialog("Detailed Attendance List", width="large")
+def show_detailed_attendance_dialog(session_id, subject, date_str):
+    st.write(f"##### Detailed Attendance List for {subject} on {date_str}")
+    details = db.get_attendance_by_session(session_id)
+    
+    if details:
+        import pandas as pd
+        formatted_details = []
+        for d in details:
+            mark_time = d.get("mark_time", "")
+            try:
+                dt = pd.to_datetime(mark_time)
+                date_val = dt.strftime('%Y-%m-%d')
+                time_val = dt.strftime('%I:%M %p')
+            except:
+                date_val = ""
+                time_val = mark_time
+                
+            formatted_details.append({
+                "Student Name": d.get("name", ""),
+                "Roll Number": d.get("roll_number", ""),
+                "Status": d.get("status", ""),
+                "Subject": subject,
+                "Date": date_val,
+                "Time": time_val
+            })
+        
+        df_details = pd.DataFrame(formatted_details)
+        st.table(df_details)
+        
+        csv = df_details.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download Details (CSV)", data=csv, file_name=f"detailed_attendance_{session_id}.csv", mime="text/csv", key=f"dl_{session_id}")
+    else:
+        st.info("No detailed records found for this session.")
+
 def show_attendance_view(user):
     st.write("### View Session Attendance")
 
@@ -162,59 +197,85 @@ def show_attendance_view(user):
 
     st.write("#### Date-wise Attendance Summary")
     
-    # Extract unique subjects and courses for filters
+    # Extract unique subjects and courses and dates for filters
     subjects = list(set([s["subject"] for s in sessions]))
     subjects.insert(0, "All Subjects")
     
     courses = list(set([f"{s['course']} {s['year']} {s['division']}" for s in sessions]))
     courses.insert(0, "All Courses")
     
-    col1, col2 = st.columns(2)
+    dates = []
+    for s in sessions:
+        try:
+            d = str(s['start_time']).split(' ')[0]
+            if d not in dates:
+                dates.append(d)
+        except: pass
+    dates.sort(reverse=True)
+    dates.insert(0, "All Dates")
+    
+    col1, col2, col3 = st.columns(3)
     selected_subject = col1.selectbox("Filter by Subject", subjects)
     selected_course = col2.selectbox("Filter by Course", courses)
+    selected_date = col3.selectbox("Filter by Date", dates)
 
-    summary_data = []
+    # Filter sessions first
+    filtered_sessions = []
     for s in sessions:
         course_str = f"{s['course']} {s['year']} {s['division']}"
-        
-        # Apply filters
+        try:
+            date_str = str(s['start_time']).split(' ')[0] 
+        except:
+            date_str = str(s['start_time'])
+            
         if selected_subject != "All Subjects" and s["subject"] != selected_subject:
             continue
         if selected_course != "All Courses" and course_str != selected_course:
             continue
-            
+        if selected_date != "All Dates" and date_str != selected_date:
+            continue
+        
+        # Add the string versions so we don't recalculate
+        s['_course_str'] = course_str
+        s['_date_str'] = date_str
+        filtered_sessions.append(s)
+
+    if not filtered_sessions:
+        st.info("No matching summary data available")
+        return
+
+    # Render table header
+    header_cols = st.columns([1.5, 2, 2, 2, 1, 1, 1])
+    header_cols[0].markdown("**Action**")
+    header_cols[1].markdown("**Date**")
+    header_cols[2].markdown("**Subject**")
+    header_cols[3].markdown("**Course**")
+    header_cols[4].markdown("**Total**")
+    header_cols[5].markdown("**Present**")
+    header_cols[6].markdown("**Absent**")
+    
+    st.divider()
+
+    for s in filtered_sessions:
         summary = db.get_attendance_summary(s["id"])
         if summary:
             total = summary['total']
             present = summary['attended']
             absent = summary['absent']
-            percentage = (present / total * 100) if total > 0 else 0
             
-            try:
-                date_str = str(s['start_time']).split(' ')[0] 
-            except:
-                date_str = str(s['start_time'])
-
-            summary_data.append({
-                "Date": date_str,
-                "Subject": s["subject"],
-                "Course": course_str,
-                "Total": total,
-                "Present": present,
-                "Absent": absent,
-                "Attendance %": f"{percentage:.1f}%"
-            })
-
-    if summary_data:
-        import pandas as pd
-        df = pd.DataFrame(summary_data)
-        st.dataframe(df, use_container_width=False, hide_index=True)
-        
-        # Download button
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download Summary (CSV)", data=csv, file_name="teacher_attendance_summary.csv", mime="text/csv")
-    else:
-        st.info("No matching summary data available")
+            cols = st.columns([1.5, 2, 2, 2, 1, 1, 1])
+            
+            if cols[0].button("Show Attendance", key=f"btn_show_{s['id']}"):
+                show_detailed_attendance_dialog(s["id"], s["subject"], s["_date_str"])
+                
+            cols[1].write(s['_date_str'])
+            cols[2].write(s["subject"])
+            cols[3].write(s['_course_str'])
+            cols[4].write(str(total))
+            cols[5].write(str(present))
+            cols[6].write(str(absent))
+            
+            st.divider()
 
 
 def show_session_history(user):
